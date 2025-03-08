@@ -1,5 +1,4 @@
-#!python abx.py
-
+#!/usr/bin/env python
 #--------========########========--------
 #	Android Binary XML decoder
 #	2025-03-08	Erik Johnson - EkriirkE
@@ -15,15 +14,22 @@ import sys
 import struct
 import base64
 
-#Tag attributes are all enquoted.  Otherwise numbers do not get quoted
+#Newline character(s) that are produced after tags and content (leave empty "" for no newlines)
+NewLines	= "\n"
+#Tag attributes are all enquoted.  Otherwise numbers and boolean do not get quoted
 QuoteAllAttr	= True
 #Each attribute gets its own line
 BreakAllAttr	= False
 #Empty tags are <self closed />. Otherwise <empty tag=is></empty>
 SelfCloseEmpty	= True
-#Indentation character(s),  None if none
+#Indentation character(s),  None if none.  Best used with newlines
 Indent		= "\t"
 
+if len(sys.argv)<2:
+	print("Please pass an input file.")
+	exit(1)
+
+#Event types
 XML_START_DOCUMENT	= 0
 XML_END_DOCUMENT	= 1
 XML_START_TAG		= 2
@@ -37,6 +43,7 @@ XML_COMMENT		= 9
 XML_DOCDECL		= 10
 XML_ATTRIBUTE		= 15
 
+#Type types
 TYPE_NULL		= 1
 TYPE_STRING		= 2
 TYPE_STRING_INTERNED	= 3
@@ -51,15 +58,19 @@ TYPE_DOUBLE		= 11
 TYPE_TRUE		= 12
 TYPE_FALSE		= 13
 
+#stacks
 strings=[]
 tags=[]
 with open(sys.argv[1],"rb") as x:
+	#Get filesize
 	x.seek(0,2)
 	xlength=x.tell()
 	x.seek(0,0)
 
+	#Let's goooo!
 	if x.read(4)!=b"ABX\0":
-		raise Exception("This is not an ABX file.")
+		print("This is not an ABX file.")
+		exit(2)
 	InTag=False
 	Content=False
 	while x.tell()<xlength:
@@ -67,10 +78,14 @@ with open(sys.argv[1],"rb") as x:
 		type=token>>4
 		event=token&0x0F
 
+		#Attributes have an implied TYPE_STRING_INTERNED before the actual type
 		if event==XML_ATTRIBUTE:
+			if not InTag:
+				raise Exception("Attribute encountered outside a tag")
 			if (slen:=struct.unpack('>H',x.read(2))[0])!=0xFFFF:pval=strings[slen]
 			else:strings+=[pval:=x.read(struct.unpack('>H',x.read(2))[0]).decode()]
 
+		#Get data based on type
 		if type==TYPE_NULL:
 			val=None
 		elif type==TYPE_STRING:
@@ -103,16 +118,17 @@ with open(sys.argv[1],"rb") as x:
 			vale=False
 		else:raise Exception(f"Unknown Type {type}")
 
+		#Use data accordingly....
 		if event==XML_START_DOCUMENT:
-			#print("<xml>")
+			#print("<xml>",end=NewLines)
 			tags+=["xml"]
 			continue
 		elif event==XML_END_DOCUMENT:
 			val=tags.pop()
-			#print(f"</{val}>")
+			#print(f"</{val}>",end=NewLines)
 			break
 		elif event==XML_START_TAG:
-			if InTag:print(">")
+			if InTag:print(">",end=NewLines)
 			if Indent:print(Indent*(len(tags)-1),end="")
 			InTag=True
 			Content=False
@@ -124,20 +140,20 @@ with open(sys.argv[1],"rb") as x:
 			if InTag:
 				InTag=False
 				if SelfCloseEmpty and not Content:
-					print(" />")
+					print(" />",end=NewLines)
 					Content=True
 					continue
-				print(">")
+				print(">",end=NewLines)
 			if Indent:print(Indent*(len(tags)-1),end="")
-			print(f"</{val}>")
+			print(f"</{val}>",end=NewLines)
 			Content=True
 		elif event==XML_TEXT:
 			if InTag:
-				print(">")
+				print(">",end=NewLines)
 				InTag=False
 			Content=True
 			if Indent:print(Indent*(len(tags)-1),end="")
-			print(val)
+			print(val,end=NewLines)
 		#elif event==XML_CDSECT:
 		#elif event==XML_ENTITY_REF:
 		elif event==XML_WHITESPACE:
@@ -145,22 +161,22 @@ with open(sys.argv[1],"rb") as x:
 		#elif event==XML_INSTRUCTION:
 		elif event==XML_COMMENT:
 			if InTag:
-				print(">")
+				print(">",end=NewLines)
 				InTag=False
 			Content=True
-			print(f"<!-- {val} -->")
+			print(f"<!-- {val} -->",end=NewLines)
 		#elif event==XML_DOCDECL:
 		elif event==XML_ATTRIBUTE:
 			if QuoteAllAttr or type not in (TYPE_INT,TYPE_LONG,TYPE_FLOAT,TYPE_DOUBLE,TYPE_TRUE,TYPE_FALSE):val='"'+str(val)+'"'
 			if BreakAllAttr and AttrC:
-				print()
+				print(NewLines)
 				if Indent:print(Indent*(len(tags)-1),end="")
 			else:print(" ",end="")
 			print(f"{pval}={val}",end="")
 			AttrC+=1
 		else:raise Exception(f"Unknown Event {event}")
 	if x.tell()<xlength:
-		raise Exception("Document ended with more data left")
+		raise Exception("Document ended with more data remaining")
 
 if tags:
 	raise Exception("Document ended but there are unclosed tags")
