@@ -115,7 +115,7 @@ with open(sys.argv[1],"rb") as x:
 		elif type==TYPE_TRUE:
 			val=True
 		elif type==TYPE_FALSE:
-			vale=False
+			val=False
 		else:raise Exception(f"Unknown Type {type}")
 
 		#Use data accordingly....
