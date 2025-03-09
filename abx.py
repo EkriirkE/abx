@@ -29,6 +29,8 @@ SelfCloseEmpty	= True
 BoolStyle	= 0
 #Trim leading 0s from Hex values.  0x0000001F > 0x1F
 TrimHex		= True
+#If parsing errors occur, keep going?
+Lenient		= False
 
 
 
@@ -78,7 +80,7 @@ with stream as x:
 
 	#Let's goooo!
 	if x.read(4)!=b"ABX\0":
-		print("This is not an ABX file.")
+		sys.stderr.write("This is not an ABX file!\n")
 		exit(2)
 	InTag=False
 	Content=False
@@ -90,9 +92,10 @@ with stream as x:
 		#Attributes have an implied TYPE_STRING_INTERNED before the actual type
 		if event==XML_ATTRIBUTE:
 			if not InTag:
-				raise Exception("Attribute encountered outside a tag")
-			if (idx:=struct.unpack('>H',x.read(2))[0])!=0xFFFF:pval=strings[idx]
-			else:strings+=[pval:=x.read(struct.unpack('>H',x.read(2))[0]).decode()]
+				sys.stderr.write("Attribute encountered outside a tag.\n")
+				if not Lenient:exit(3)
+			if (idx:=struct.unpack('>H',x.read(2))[0])!=0xFFFF:aname=strings[idx]
+			else:strings+=[aname:=x.read(struct.unpack('>H',x.read(2))[0]).decode()]
 
 		#Get data based on type
 		if type==TYPE_NULL:
@@ -132,7 +135,10 @@ with stream as x:
 			if BoolStyle==1:val=val.lower()
 			if BoolStyle==2:val=val.upper()
 			if BoolStyle==3:val=0
-		else:raise Exception(f"Unknown Type {type}")
+		else:
+			sys.stderr.write(f"Unknown Type {type}\n")
+			if not Lenient:exit(3)
+			continue
 
 		#Use data accordingly....
 		if event==XML_START_DOCUMENT:
@@ -189,11 +195,14 @@ with stream as x:
 				print(NewLines)
 				if IndentLines:print(IndentLines*(len(tags)-1),end="")
 			else:print(" ",end="")
-			print(f"{pval}={val}",end="")
+			print(aname if None==val else f"{aname}={val}",end="")
 			AttrC+=1
-		else:raise Exception(f"Unknown Event {event}")
+		else:
+			sys.stderr.write(f"Unknown Event {event}.\n")
+			if not Lenient:exit(3)
 	if xlength>=0 and x.tell()<xlength:
-		raise Exception("Document ended with more data remaining")
-
+		sys.stderr.write("Document ended with more data remaining.\n")
+		exit(3)
 if tags:
-	raise Exception("Document ended but there are unclosed tags")
+	sys.stderr.write("Document ended but there are unclosed tags.\n")
+	exit(3)
