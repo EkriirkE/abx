@@ -186,6 +186,7 @@ with stream as x:
 				print(">",end=NewLines)
 				InTag=False
 			Content=True
+			if IndentLines:print(IndentLines*(len(tags)-1),end="")
 			print(f"<!-- {val} -->",end=NewLines)
 		#elif event==XML_DOCDECL:
 		elif event==XML_ATTRIBUTE:
